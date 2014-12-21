@@ -1,0 +1,81 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	c_custkey,
+	c_name,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	c_acctbal,
+	n_name,
+	c_address,
+	c_phone,
+	c_comment
+from
+	customer,
+	orders,
+	lineitem,
+	nation
+where
+	c_custkey = o_custkey
+	and l_orderkey = o_orderkey
+	and o_orderdate >= date '1993-09-01'
+	and o_orderdate < cast(date '1993-09-01' + interval '3 month' as date)
+	and l_returnflag = 'R'
+	and c_nationkey = n_nationkey
+group by
+	c_custkey,
+	c_name,
+	c_acctbal,
+	c_phone,
+	n_name,
+	c_address,
+	c_comment
+order by
+	revenue desc
+LIMIT 20;
+                                                                                                QUERY PLAN                                                                                                 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=1175886.91..1175886.96 rows=20 width=175) (actual time=23057.827..23057.835 rows=20 loops=1)
+   Buffers: shared hit=280363 read=1127860
+   ->  Sort  (cost=1175886.91..1177262.55 rows=550258 width=175) (actual time=23057.822..23057.827 rows=20 loops=1)
+         Sort Key: (sum((lineitem.l_extendedprice * (1::double precision - lineitem.l_discount))))
+         Sort Method: top-N heapsort  Memory: 30kB
+         Buffers: shared hit=280363 read=1127860
+         ->  HashAggregate  (cost=1155742.16..1161244.74 rows=550258 width=175) (actual time=22752.362..22933.458 rows=378762 loops=1)
+               Buffers: shared hit=280360 read=1127860
+               ->  Hash Join  (cost=396442.14..1141985.71 rows=550258 width=175) (actual time=4359.897..20897.465 rows=1136235 loops=1)
+                     Hash Cond: (customer.c_nationkey = nation.n_nationkey)
+                     Buffers: shared hit=280360 read=1127860
+                     ->  Hash Join  (cost=396440.57..1134418.10 rows=550258 width=153) (actual time=4359.843..20520.958 rows=1136235 loops=1)
+                           Hash Cond: (orders.o_custkey = customer.c_custkey)
+                           Buffers: shared hit=280359 read=1127860
+                           ->  Merge Join  (cost=327412.57..1054384.94 rows=550258 width=12) (actual time=2943.406..17415.443 rows=1136235 loops=1)
+                                 Merge Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                                 Buffers: shared hit=280357 read=1092584
+                                 ->  Sort  (cost=327412.55..328815.18 rows=561051 width=8) (actual time=2943.257..3033.719 rows=567853 loops=1)
+                                       Sort Key: orders.o_orderkey
+                                       Sort Method: quicksort  Memory: 51195kB
+                                       Buffers: shared hit=37013 read=192179
+                                       ->  Bitmap Heap Scan on orders  (cost=11900.67..273838.43 rows=561051 width=8) (actual time=185.272..2762.948 rows=567853 loops=1)
+                                             Recheck Cond: ((o_orderdate >= '1993-09-01'::date) AND (o_orderdate < '1993-12-01'::date))
+                                             Buffers: shared hit=37013 read=192179
+                                             ->  Bitmap Index Scan on orders_o_orderdate_o_orderkey_idx  (cost=0.00..11760.41 rows=561051 width=0) (actual time=125.240..125.240 rows=567853 loops=1)
+                                                   Index Cond: ((o_orderdate >= '1993-09-01'::date) AND (o_orderdate < '1993-12-01'::date))
+                                                   Buffers: shared read=1554
+                                 ->  Index Scan using lineitem_l_orderkey_idx_l_returnflag on lineitem  (cost=0.00..681849.22 rows=14726134 width=12) (actual time=0.119..12510.179 rows=14822992 loops=1)
+                                       Buffers: shared hit=243344 read=900405
+                           ->  Hash  (cost=50278.00..50278.00 rows=1500000 width=145) (actual time=1414.641..1414.641 rows=1500000 loops=1)
+                                 Buckets: 262144  Batches: 1  Memory Usage: 265117kB
+                                 Buffers: shared hit=2 read=35276
+                                 ->  Seq Scan on customer  (cost=0.00..50278.00 rows=1500000 width=145) (actual time=0.004..654.075 rows=1500000 loops=1)
+                                       Buffers: shared hit=2 read=35276
+                     ->  Hash  (cost=1.25..1.25 rows=25 width=30) (actual time=0.036..0.036 rows=25 loops=1)
+                           Buckets: 1024  Batches: 1  Memory Usage: 2kB
+                           Buffers: shared hit=1
+                           ->  Seq Scan on nation  (cost=0.00..1.25 rows=25 width=30) (actual time=0.011..0.016 rows=25 loops=1)
+                                 Buffers: shared hit=1
+ Total runtime: 23091.517 ms
+(40 rows)
+
+COMMIT;
+COMMIT

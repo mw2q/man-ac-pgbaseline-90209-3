@@ -1,0 +1,75 @@
+BEGIN;
+BEGIN
+create or replace view revenue1 (supplier_no, total_revenue) as
+	select
+		l_suppkey,
+		sum(l_extendedprice * (1 - l_discount))
+	from
+		lineitem
+	where
+		l_shipdate >= '1994-04-01'
+		and l_shipdate < date'1994-04-01' + interval '90 days'
+	group by
+		l_suppkey;
+CREATE VIEW
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	s_suppkey,
+	s_name,
+	s_address,
+	s_phone,
+	total_revenue
+from
+	supplier,
+	revenue1
+where
+	s_suppkey = supplier_no
+	and total_revenue = (
+		select
+			max(total_revenue)
+		from
+			revenue1
+	)
+order by
+	s_suppkey;
+                                                                                       QUERY PLAN                                                                                        
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Merge Join  (cost=2373093.69..2378191.09 rows=3729 width=79) (actual time=54540.386..54540.389 rows=1 loops=1)
+   Merge Cond: (supplier.s_suppkey = revenue1.supplier_no)
+   Buffers: shared hit=741398 read=585964 dirtied=492 written=14920
+   InitPlan 1 (returns $0)
+     ->  Aggregate  (cost=1177985.61..1177985.62 rows=1 width=8) (actual time=28717.456..28717.457 rows=1 loops=1)
+           Buffers: shared hit=279844 read=383033 written=891
+           ->  HashAggregate  (cost=1177901.70..1177938.99 rows=3729 width=12) (actual time=28618.150..28702.486 rows=100000 loops=1)
+                 Buffers: shared hit=279844 read=383033 written=891
+                 ->  Bitmap Heap Scan on lineitem  (cost=47629.20..1155366.70 rows=2253500 width=12) (actual time=2421.958..24140.702 rows=2243468 loops=1)
+                       Recheck Cond: ((l_shipdate >= '1994-04-01'::date) AND (l_shipdate < '1994-06-30 00:00:00'::timestamp without time zone))
+                       Buffers: shared hit=279844 read=383033 written=891
+                       ->  Bitmap Index Scan on lineitem_l_shipdate_l_suppkey__idx  (cost=0.00..47065.83 rows=2253500 width=0) (actual time=1987.607..1987.607 rows=2263601 loops=1)
+                             Index Cond: ((l_shipdate >= '1994-04-01'::date) AND (l_shipdate < '1994-06-30 00:00:00'::timestamp without time zone))
+                             Buffers: shared hit=36 read=6098 written=391
+   ->  Index Scan using pk_supplier on supplier  (cost=0.00..4791.46 rows=100000 width=71) (actual time=0.115..28.680 rows=58899 loops=1)
+         Buffers: shared hit=1607
+   ->  Sort  (cost=1195108.07..1195117.39 rows=3729 width=12) (actual time=54504.614..54504.615 rows=1 loops=1)
+         Sort Key: revenue1.supplier_no
+         Sort Method: quicksort  Memory: 25kB
+         Buffers: shared hit=739791 read=585964 dirtied=492 written=14920
+         ->  Subquery Scan on revenue1  (cost=1194802.95..1194886.86 rows=3729 width=12) (actual time=54475.863..54504.567 rows=1 loops=1)
+               Buffers: shared hit=739791 read=585964 dirtied=492 written=14920
+               ->  HashAggregate  (cost=1194802.95..1194849.57 rows=3729 width=12) (actual time=54475.860..54504.561 rows=1 loops=1)
+                     Filter: (sum((public.lineitem.l_extendedprice * (1::double precision - public.lineitem.l_discount))) = $0)
+                     Rows Removed by Filter: 99999
+                     Buffers: shared hit=739791 read=585964 dirtied=492 written=14920
+                     ->  Bitmap Heap Scan on lineitem  (cost=47629.20..1155366.70 rows=2253500 width=12) (actual time=2568.077..21291.956 rows=2243468 loops=1)
+                           Recheck Cond: ((l_shipdate >= '1994-04-01'::date) AND (l_shipdate < '1994-06-30 00:00:00'::timestamp without time zone))
+                           Buffers: shared hit=459947 read=202931 dirtied=492 written=14029
+                           ->  Bitmap Index Scan on lineitem_l_shipdate_l_suppkey__idx  (cost=0.00..47065.83 rows=2253500 width=0) (actual time=2171.673..2171.673 rows=2261599 loops=1)
+                                 Index Cond: ((l_shipdate >= '1994-04-01'::date) AND (l_shipdate < '1994-06-30 00:00:00'::timestamp without time zone))
+                                 Buffers: shared hit=142 read=5993
+ Total runtime: 54552.355 ms
+(33 rows)
+
+drop view revenue1;
+DROP VIEW
+COMMIT;
+COMMIT

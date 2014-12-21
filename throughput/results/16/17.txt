@@ -1,0 +1,52 @@
+BEGIN;
+BEGIN
+EXPLAIN (ANALYZE, BUFFERS)
+select
+	sum(l_extendedprice) / 7.0 as avg_yearly
+from
+	lineitem,
+	part
+where
+	p_partkey = l_partkey
+	and p_brand = 'Brand#24'
+	and p_container = 'WRAP JAR'
+	and l_quantity < (
+		select
+			0.2 * avg(l_quantity)
+		from
+			lineitem
+		where
+			l_partkey = p_partkey
+	);
+                                                                                         QUERY PLAN                                                                                          
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=398680.35..398680.36 rows=1 width=4) (actual time=2207.491..2207.492 rows=1 loops=1)
+   Buffers: shared hit=56154 read=31275 dirtied=112
+   ->  Nested Loop  (cost=140.78..398630.49 rows=19944 width=4) (actual time=2.776..2205.013 rows=5647 loops=1)
+         Buffers: shared hit=56154 read=31275 dirtied=112
+         ->  Index Only Scan using part_p_container_p_brand_p_partkey_idx on part  (cost=0.00..7841.07 rows=1985 width=4) (actual time=0.454..102.195 rows=2079 loops=1)
+               Index Cond: ((p_container = 'WRAP JAR'::bpchar) AND (p_brand = 'Brand#24'::bpchar))
+               Heap Fetches: 2079
+               Buffers: shared read=2034
+         ->  Index Scan using lineitem_l_partkey_l_quantity_l_shipmode_idx on lineitem  (cost=140.78..196.77 rows=10 width=12) (actual time=0.040..0.055 rows=3 loops=2079)
+               Index Cond: ((l_partkey = part.p_partkey) AND (l_quantity < (SubPlan 1)))
+               Buffers: shared hit=14018
+               SubPlan 1
+                 ->  Aggregate  (cost=140.77..140.78 rows=1 width=4) (actual time=0.948..0.948 rows=1 loops=2079)
+                       Buffers: shared hit=42136 read=29241 dirtied=112
+                       ->  Index Only Scan using lineitem_l_partkey_l_quantity_l_shipmode_idx on lineitem  (cost=0.00..140.69 rows=31 width=4) (actual time=0.113..0.927 rows=30 loops=2079)
+                             Index Cond: (l_partkey = part.p_partkey)
+                             Heap Fetches: 62748
+                             Buffers: shared hit=42136 read=29241 dirtied=112
+               SubPlan 1
+                 ->  Aggregate  (cost=140.77..140.78 rows=1 width=4) (actual time=0.948..0.948 rows=1 loops=2079)
+                       Buffers: shared hit=42136 read=29241 dirtied=112
+                       ->  Index Only Scan using lineitem_l_partkey_l_quantity_l_shipmode_idx on lineitem  (cost=0.00..140.69 rows=31 width=4) (actual time=0.113..0.927 rows=30 loops=2079)
+                             Index Cond: (l_partkey = part.p_partkey)
+                             Heap Fetches: 62748
+                             Buffers: shared hit=42136 read=29241 dirtied=112
+ Total runtime: 2207.782 ms
+(26 rows)
+
+COMMIT;
+COMMIT
